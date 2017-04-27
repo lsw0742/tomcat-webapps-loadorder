@@ -27,8 +27,7 @@ import org.w3c.dom.NodeList;
 		File configBase = host.getConfigBaseFile();
 		String[] filteredAppPaths = filterAppPaths(appBase.list());
 		
-		AdjustWebappsLoadOrder.iniLoadOrders(host);
-		String[] adjustedWebapps=AdjustWebappsLoadOrder.adjustWebappsOrder(configBase.list(), filteredAppPaths, filteredAppPaths);
+		List<String> adjustedWebapps=AdjustWebappsLoadOrder.adjustWebappsOrder(host, configBase.list(), filteredAppPaths);
 		for(String webapp : adjustedWebapps){
 			if(webapp.endsWith(".xml")){
 		        // Deploy XML descriptors from configBase
@@ -49,22 +48,16 @@ import org.w3c.dom.NodeList;
 public class AdjustWebappsLoadOrder {
 	
 	private static Log log=LogFactory.getLog(AdjustWebappsLoadOrder.class);
-	private static List<String> configWebapps=new ArrayList<String>();
 	
-	/**
-	 * @param host
-	 */
-	public static void iniLoadOrders(Host host){
-		iniLoadOrders(host.getCatalinaBase().getPath()+"/conf");
-	}
 	/**
 	 * @param basePath
 	 * @return
 	 */
-	public static void iniLoadOrders(String basePath){
+	private static List<String> iniLoadOrders(String basePath){
 		try {
+			List<String> configWebapps=new ArrayList<String>();
 			File orderFile=new File(basePath+"/webapps-load-order.xml");
-			if(!orderFile.exists()){return;}
+			if(!orderFile.exists()){return configWebapps;}
 			
 			DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
 			Document document = db.parse(orderFile);
@@ -80,26 +73,38 @@ public class AdjustWebappsLoadOrder {
 				configWebapps.add(nodes.item(i).getFirstChild().getNodeValue());
 			}
 			log.info("will expect the load order of the webapps: "+configWebapps);
+			return configWebapps;
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}
 	
 	/**
-	 * @param xmlWebapps
-	 * @param warWebapps
-	 * @param dirWebapps
+	 * @param host
+	 * @param configXmls
+	 * @param appPaths
 	 * @return
 	 */
-	public static String[] adjustWebappsOrder(String[] xmlWebapps, String[] warWebapps, String[] dirWebapps){
+	public static List<String> adjustWebappsOrder(Host host, String[] configXmls, String[] appPaths){
+		return adjustWebappsOrder(host.getCatalinaBase().getPath()+"/conf", configXmls, appPaths);
+	}
+	
+	/**
+	 * @param basePath
+	 * @param configXmls
+	 * @param appPaths
+	 * @return
+	 */
+	public static List<String> adjustWebappsOrder(String basePath, String[] configXmls, String[] appPaths){
+		List<String> configWebapps=iniLoadOrders(basePath);
+		
 		Set<String> allWebapps=new TreeSet<String>(new Comparator<String>(){
 			public int compare(String o1, String o2) {
 				return o2.compareTo(o1);
 			}
 		});
-		allWebapps.addAll(Arrays.asList(xmlWebapps));
-		allWebapps.addAll(Arrays.asList(warWebapps));
-		allWebapps.addAll(Arrays.asList(dirWebapps));
+		allWebapps.addAll(Arrays.asList(configXmls));
+		allWebapps.addAll(Arrays.asList(appPaths));
 		
 		List<String> tempWebapps=new ArrayList<String>(configWebapps.size()*3+allWebapps.size());
 		for(String webapp : configWebapps){
@@ -125,7 +130,7 @@ public class AdjustWebappsLoadOrder {
 			log.info("before adjusting the load order of the webapps: "+allWebapps);
 			log.info("after adjusted the load order of the webapps: "+tempWebapps);
 		}
-		return tempWebapps.toArray(new String[tempWebapps.size()]);
+		return tempWebapps;
 	}
 
 }
